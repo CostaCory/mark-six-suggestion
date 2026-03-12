@@ -283,7 +283,7 @@
 <!-- ── TITLE ── -->
 <div class="title-block">
   <h1>六合彩智能選號 · Mark Six Smart Pick</h1>
-  <div class="sub">數據平衡選號 · Data-Balanced · 2,522 期 Draws · 2008–03/03/2026 · 僅選號 11–40 / Numbers 11–40 Only</div>
+  <div class="sub">數據平衡選號 · Data-Balanced · 2,526 期 Draws · 2008–12/03/2026 · 僅選號 11–40 / Numbers 11–40 Only</div>
 </div>
 
 <!-- ══════════════════════════════
@@ -324,7 +324,7 @@
   <!-- Status bar -->
   <div class="status-bar">
     <div><span class="dot" id="status-dot"></span><span id="status-txt" style="color:var(--text2)">尚未獲取 · Not yet fetched</span></div>
-    <div id="draw-count" style="font-size:.62rem;color:var(--muted)">基礎數據 / Base data: 2,522 期（至 03/03/2026）</div>
+    <div id="draw-count" style="font-size:.62rem;color:var(--muted)">基礎數據 / Base data: 2,526 期（至 12/03/2026）</div>
   </div>
 
   <!-- How it works -->
@@ -335,16 +335,16 @@
       <div class="en"><span class="sn">①</span>Click the "Fetch Latest" button</div>
     </div>
     <div class="how-step">
-      <div class="zh"><span class="sn">②</span>瀏覽器直接向 HKJC 官方 API 發出請求，無需伺服器或安裝任何程式</div>
-      <div class="en"><span class="sn">②</span>Your browser calls the official HKJC API directly — no server or installation needed</div>
+      <div class="zh"><span class="sn">②</span>透過 <strong>allorigins.win</strong> CORS 代理，抓取 <strong>lottery.hk</strong> 的開獎頁面，解析最新期數</div>
+      <div class="en"><span class="sn">②</span>Uses the <strong>allorigins.win</strong> CORS proxy to fetch <strong>lottery.hk</strong> results and parse the latest draws</div>
     </div>
     <div class="how-step">
       <div class="zh"><span class="sn">③</span>最新開獎號碼即時顯示，頻率數據自動更新，選號建議同步刷新</div>
       <div class="en"><span class="sn">③</span>Latest results are shown instantly, frequency data is updated, and suggested numbers refresh automatically</div>
     </div>
     <div class="how-step">
-      <div class="zh"><span class="sn">④</span>若遇 CORS 限制（瀏覽器安全政策阻擋），請使用本頁底部的 Python 腳本在本機執行</div>
-      <div class="en"><span class="sn">④</span>If CORS blocks the request (browser security policy), use the Python script at the bottom of this page to run locally</div>
+      <div class="zh"><span class="sn">④</span>若代理服務暫時無法使用，工具仍會以內嵌的最新數據正常運作，不受影響</div>
+      <div class="en"><span class="sn">④</span>If the proxy is temporarily unavailable, the tool still works normally using the built-in baseline data</div>
     </div>
   </div>
 </div>
@@ -546,12 +546,12 @@ if __name__ == "__main__":
 ════════════════════════════════ -->
 <script>
 // ── Frequency data (base: 2,517 draws) ──────────────
-let FREQ = {1:327,2:316,3:308,4:331,5:281,6:304,7:301,8:309,9:315,10:294,
-  11:315,12:320,13:310,14:292,15:320,16:314,17:316,18:321,19:283,20:329,
-  21:326,22:322,23:285,24:342,25:295,26:298,27:289,28:334,29:323,30:337,
-  31:293,32:331,33:320,34:335,35:316,36:296,37:294,38:297,39:300,40:285,
-  41:272,42:288,43:274,44:312,45:302,46:321,47:306,48:294,49:344};
-let TOTAL_DRAWS = 2522;
+let FREQ = {1:327,2:317,3:308,4:332,5:281,6:304,7:302,8:309,9:315,10:294,
+  11:316,12:321,13:311,14:293,15:321,16:316,17:316,18:323,19:283,20:329,
+  21:326,22:323,23:285,24:343,25:296,26:299,27:289,28:335,29:323,30:338,
+  31:295,32:331,33:320,34:337,35:317,36:296,37:296,38:297,39:300,40:285,
+  41:272,42:289,43:274,44:312,45:302,46:322,47:306,48:294,49:345};
+let TOTAL_DRAWS = 2526;
 
 // ── Helpers ─────────────────────────────────────────
 const EXCLUDED = new Set([1,2,3,4,5,6,7,8,9,10,41,42,43,44,45,46,47,48,49]);
@@ -596,16 +596,16 @@ let seed=42, currentPick=generate(42);
 // ── Baseline: draws already baked into FREQ ──────────
 // Everything up to and including 26/020 (2026-02-21) is counted.
 // We track fetched draw IDs to avoid double-counting on re-fetch.
-const BASELINE_DATE = new Date('2026-03-03T00:00:00');
-const FETCHED_IDS   = new Set(['26/020','26/021','26/022','26/023','26/024']);
+const BASELINE_DATE = new Date('2026-03-12T00:00:00');
+const FETCHED_IDS   = new Set(['26/020','26/021','26/022','26/023','26/024','26/025','26/026','26/027','26/028']);
 
 const ballColor = n => n<=10?'r':n<=20?'b':n<=30?'g':n<=40?'r':'b';
 
 // Show the latest known draw (26/020) immediately on load
 function showBuiltInDraw() {
-  const nums=[6,13,20,31,32,44], sp=45;
-  document.getElementById('dm-id').textContent    = '26/024';
-  document.getElementById('dm-date').textContent  = '2026/03/03';
+  const nums=[7,13,14,16,26,30], sp=34;
+  document.getElementById('dm-id').textContent    = '26/028';
+  document.getElementById('dm-date').textContent  = '2026/03/12';
   document.getElementById('dm-prize').textContent = '—';
   document.getElementById('dm-added').textContent = '已內嵌 / Built-in';
   document.getElementById('draw-meta').style.display = 'flex';
@@ -615,66 +615,89 @@ function showBuiltInDraw() {
     +`<div class="mb plus">+</div><div class="mb s">${sp}</div>`;
 }
 
-// ── Auto-fetch from HKJC API ────────────────────────
+// ── Auto-fetch from lottery.hk ───────────────────────
 async function fetchLatest(){
   const btn=document.getElementById('btn-fetch');
   const dot=document.getElementById('status-dot');
   const txt=document.getElementById('status-txt');
   btn.disabled=true;
   dot.className='dot spin';
-  txt.innerHTML='<span style="color:var(--gold)">正在從 HKJC 獲取最新數據… / Fetching latest data from HKJC…</span>';
+  txt.innerHTML='<span style="color:var(--gold)">正在從 lottery.hk 獲取最新數據… / Fetching latest data from lottery.hk…</span>';
 
-  // Only fetch draws AFTER our baseline date
-  const now  = new Date();
-  const start= new Date(BASELINE_DATE.getTime() + 864e5); // day after baseline
-  const fmt  = d=>`${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}`;
-  const url  = `https://bet.hkjc.com/marksix/getJSON.aspx?sd=${fmt(start)}&ed=${fmt(now)}&sb=0`;
+  // Use allorigins CORS proxy to fetch lottery.hk results page
+  const targetUrl = 'https://lottery.hk/en/mark-six/results/';
+  const proxyUrl  = `https://api.allorigins.win/get?url=${encodeURIComponent(targetUrl)}`;
 
   try {
-    const resp = await fetch(url);
+    const resp = await fetch(proxyUrl);
     if(!resp.ok) throw new Error(`HTTP ${resp.status}`);
-    const data = await resp.json();
+    const json = await resp.json();
+    const html = json.contents;
+    if(!html) throw new Error('空回應 / Empty response');
 
-    // Filter to only truly new draws not already counted
-    const newDraws = (data||[]).filter(d => !FETCHED_IDS.has(d.id));
+    // Parse draw rows from the HTML table
+    // Each row: <td>26/028</td> <td>12/03/2026</td> <td>..balls..</td>
+    const rowRegex = /(\d{2}\/\d{3})[^<]*<\/td>\s*<td[^>]*>\s*(\d{2}\/\d{2}\/\d{4})/g;
+    const ballRegex = /\*\s*(\d{1,2})/g;
 
-    if(newDraws.length === 0) {
-      // Already up to date — just show the built-in draw nicely
+    // Split by draw rows in the table
+    const drawRegex = /(\d{2}\/\d{3})<\/td><td[^>]*>([\d\/]+)<\/td><td[^>]*>([\s\S]*?)<\/td>/g;
+
+    // Simpler: find all draw blocks using the known structure
+    const blocks = [...html.matchAll(/<tr[^>]*>[\s\S]*?(\d{2}\/\d{3})[\s\S]*?(\d{2}\/\d{2}\/\d{4})[\s\S]*?(<td[\s\S]*?<\/td>)[\s\S]*?<\/tr>/g)];
+
+    // Alternative direct parse: find draw IDs and their following numbers
+    const draws = [];
+    const idDateRegex = />(\d{2}\/\d{3})<\/td>\s*<td[^>]*>([\d\/]+)<\/td>/g;
+    const allText = html.replace(/<[^>]+>/g, ' ').replace(/\s+/g,' ');
+
+    // Parse the plain text version: "26/028 12/03/2026 7 13 14 16 26 30 34"
+    const plainRegex = /(\d{2}\/\d{3})\s+(\d{2}\/\d{2}\/\d{4})\s+((?:\d{1,2}\s*){7})/g;
+    let m;
+    while((m=plainRegex.exec(allText))!==null){
+      const id   = m[1];
+      const date = m[2];
+      const numStrs = m[3].trim().split(/\s+/).map(Number).filter(n=>n>=1&&n<=49);
+      if(numStrs.length===7){
+        draws.push({ id, date, nums: numStrs.slice(0,6), special: numStrs[6] });
+      }
+    }
+
+    if(draws.length===0) throw new Error('解析失敗 / Could not parse draw data');
+
+    // Filter to only draws after our baseline
+    const newDraws = draws.filter(d=>!FETCHED_IDS.has(d.id));
+
+    if(newDraws.length===0){
       dot.className='dot ok';
-      txt.innerHTML=`<span style="color:var(--green)">✓ 已是最新 · Already up to date — 最新一期 26/020（2026/02/21）</span>`;
+      txt.innerHTML=`<span style="color:var(--green)">✓ 已是最新 · Already up to date — 最新一期 26/028（2026/03/12）</span>`;
       document.getElementById('draw-count').textContent=`數據期數 / Total draws: ${TOTAL_DRAWS}`;
       btn.disabled=false;
       return;
     }
 
-    // Sort newest first, show the latest
-    newDraws.sort((a,b)=>new Date(b.date.replace(/\//g,'-'))-new Date(a.date.replace(/\//g,'-')));
-    const latest = newDraws[0];
+    // Sort newest first
+    newDraws.sort((a,b)=>new Date(b.date.split('/').reverse().join('-'))-new Date(a.date.split('/').reverse().join('-')));
+    const latest=newDraws[0];
 
-    // Add new draws to FREQ (no double-counting)
+    // Merge into FREQ
     newDraws.forEach(d=>{
-      try{
-        d.no.split('+').map(Number).forEach(n=>{ if(n>=1&&n<=49) FREQ[n]=(FREQ[n]||0)+1; });
-        FETCHED_IDS.add(d.id);
-        TOTAL_DRAWS++;
-      }catch(e){}
+      [...d.nums, d.special].forEach(n=>{ if(n>=1&&n<=49) FREQ[n]=(FREQ[n]||0)+1; });
+      FETCHED_IDS.add(d.id);
+      TOTAL_DRAWS++;
     });
 
     // Update latest draw panel
-    const nums = latest.no.split('+').map(Number);
-    const sp   = Number(latest.sno);
     document.getElementById('dm-id').textContent   = latest.id;
     document.getElementById('dm-date').textContent = latest.date;
-    const p1 = latest.prizes?.[0]?.unitPrize;
-    document.getElementById('dm-prize').textContent = p1?`HKD $${Number(p1).toLocaleString()}`:'—';
-    document.getElementById('dm-added').textContent = `+${newDraws.length} 期新數據 / new draws`;
+    document.getElementById('dm-prize').textContent= '—';
+    document.getElementById('dm-added').textContent= `+${newDraws.length} 期新數據 / new draws`;
     document.getElementById('draw-meta').style.display='flex';
     const mbEl=document.getElementById('mini-balls');
     mbEl.style.display='flex';
-    mbEl.innerHTML=nums.map(n=>`<div class="mb ${ballColor(n)}">${n}</div>`).join('')
-      +`<div class="mb plus">+</div><div class="mb s">${sp}</div>`;
+    mbEl.innerHTML=latest.nums.map(n=>`<div class="mb ${ballColor(n)}">${n}</div>`).join('')
+      +`<div class="mb plus">+</div><div class="mb s">${latest.special}</div>`;
 
-    // Re-generate with updated frequencies
     currentPick=generate(seed);
     render(currentPick);
 
@@ -684,17 +707,11 @@ async function fetchLatest(){
 
   } catch(err) {
     dot.className='dot err';
-    const isCors = err.message.includes('Failed to fetch')||err.message.includes('NetworkError')||err.message.includes('CORS');
-    if(isCors){
-      txt.innerHTML=`<span style="color:var(--red)">
-        ⚠ <strong>CORS 限制（瀏覽器安全）</strong>：您的瀏覽器阻止了直接請求 HKJC。<br>
-        但不用擔心——本工具已內嵌最新數據（截至 26/024，2026/03/03），仍可正常使用。<br><br>
-        ⚠ <strong>CORS blocked (browser security)</strong>: Your browser blocked the HKJC request.<br>
-        Don't worry — the tool already has the latest data built-in (up to draw 26/024, 03/03/2026) and works normally.
-      </span>`;
-    } else {
-      txt.innerHTML=`<span style="color:var(--red)">⚠ 獲取失敗 / Fetch failed: ${err.message}</span>`;
-    }
+    txt.innerHTML=`<span style="color:var(--red)">
+      ⚠ 自動獲取失敗 / Auto-fetch failed: ${err.message}<br>
+      但不用擔心——本工具已內嵌最新數據（截至 26/028，12/03/2026），仍可正常使用。<br>
+      Don't worry — built-in data is current up to draw 26/028 (12/03/2026) and works normally.
+    </span>`;
   }
   btn.disabled=false;
 }
@@ -772,10 +789,10 @@ function copyScript(){
 // Init
 render(currentPick);
 showBuiltInDraw();
-document.getElementById('draw-count').textContent = `數據期數 / Base data: ${TOTAL_DRAWS} 期（至 03/03/2026）`;
+document.getElementById('draw-count').textContent = `數據期數 / Base data: ${TOTAL_DRAWS} 期（至 12/03/2026）`;
 document.getElementById('status-dot').className = 'dot ok';
 document.getElementById('status-txt').innerHTML =
-  `<span style="color:var(--green)">✓ 已內嵌最新數據（26/024，03/03/2026）· 正在嘗試獲取更新… / Built-in data loaded. Checking for newer draws…</span>`;
+  `<span style="color:var(--green)">✓ 已內嵌最新數據（26/028，12/03/2026）· 正在嘗試獲取更新… / Built-in data loaded. Checking for newer draws…</span>`;
 
 // Auto-fetch on page load to catch any draws after 26/020
 window.addEventListener('load', () => {
