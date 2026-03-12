@@ -242,12 +242,26 @@
 
   /* ── REROLL ── */
   .reroll-btn{
-    background:none;border:1px solid var(--border);color:var(--muted);
-    font-family:'Noto Sans TC',sans-serif;font-size:.72rem;
-    padding:14px 36px;border-radius:6px;cursor:pointer;transition:.2s;
+    background:linear-gradient(135deg, rgba(232,200,114,0.15), rgba(232,200,114,0.08));
+    border:2px solid var(--gold);
+    color:var(--gold);
+    font-family:'Noto Sans TC',sans-serif;
+    font-size:.85rem;
+    font-weight:500;
+    padding:16px 48px;
+    border-radius:8px;
+    cursor:pointer;
+    transition:.2s;
     margin-bottom:24px;
+    letter-spacing:1px;
+    box-shadow: 0 0 18px rgba(232,200,114,0.15), inset 0 0 12px rgba(232,200,114,0.05);
   }
-  .reroll-btn:hover{border-color:var(--gold);color:var(--gold);}
+  .reroll-btn:hover{
+    background:linear-gradient(135deg, rgba(232,200,114,0.28), rgba(232,200,114,0.15));
+    box-shadow: 0 0 28px rgba(232,200,114,0.35), inset 0 0 16px rgba(232,200,114,0.1);
+    transform: translateY(-2px);
+    color:#fff;
+  }
 
   @media(max-width:580px){
     .bi,.how-step{grid-template-columns:1fr;}
