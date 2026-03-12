@@ -269,7 +269,7 @@
 <!-- ── TITLE ── -->
 <div class="title-block">
   <h1>六合彩智能選號 · Mark Six Smart Pick</h1>
-  <div class="sub">數據平衡選號 · Data-Balanced · 2,522 期 Draws · 2008–03/03/2026 · 排除 1–10 / Excluding 1–10</div>
+  <div class="sub">數據平衡選號 · Data-Balanced · 2,522 期 Draws · 2008–03/03/2026 · 僅選號 11–40 / Numbers 11–40 Only</div>
 </div>
 
 <!-- ══════════════════════════════
@@ -540,7 +540,7 @@ let FREQ = {1:327,2:316,3:308,4:331,5:281,6:304,7:301,8:309,9:315,10:294,
 let TOTAL_DRAWS = 2522;
 
 // ── Helpers ─────────────────────────────────────────
-const EXCLUDED = new Set([1,2,3,4,5,6,7,8,9,10]);
+const EXCLUDED = new Set([1,2,3,4,5,6,7,8,9,10,41,42,43,44,45,46,47,48,49]);
 
 function sortedNums() {
   return Object.entries(FREQ).map(([n,f])=>({n:+n,f}))
@@ -549,7 +549,7 @@ function sortedNums() {
 }
 function getTier(n) {
   const i=sortedNums().indexOf(n);
-  return i<8?'hot':i<17?'warm':i<26?'neutral':i<35?'cool':'cold';
+  return i<6?'hot':i<12?'warm':i<18?'neutral':i<24?'cool':'cold';
 }
 function getRank(n) { return sortedNums().indexOf(n)+1; }
 function tierZh(t){ return {hot:'極熱 🔥',warm:'偏熱',neutral:'中性',cool:'偏冷',cold:'極冷 ❄'}[t]||t; }
@@ -565,8 +565,8 @@ function pick(pool,n,rng){
   return r;
 }
 function generate(seed){
-  const S=sortedNums(); // already excludes 1-10
-  const H=S.slice(0,13),M=S.slice(13,26),C=S.slice(26);
+  const S=sortedNums(); // 30 numbers: 11-40
+  const H=S.slice(0,10),M=S.slice(10,20),C=S.slice(20);
   const rng=seededRng(seed);
   for(let a=0;a<1000;a++){
     const nums=[...new Set([...pick(H,2,rng),...pick(M,2,rng),...pick(C,2,rng)])].sort((a,b)=>a-b);
