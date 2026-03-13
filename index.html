@@ -593,11 +593,68 @@ function generate(seed){
 
 let seed=42, currentPick=generate(42);
 
-// ── Baseline: draws already baked into FREQ ──────────
-// Everything up to and including 26/020 (2026-02-21) is counted.
-// We track fetched draw IDs to avoid double-counting on re-fetch.
+// ── localStorage keys ────────────────────────────────
+const LS_FREQ   = 'ms_freq_v1';
+const LS_DRAWS  = 'ms_draws_v1';
+const LS_IDS    = 'ms_ids_v1';
+
+// ── Baseline ─────────────────────────────────────────
 const BASELINE_DATE = new Date('2026-03-12T00:00:00');
-const FETCHED_IDS   = new Set(['26/020','26/021','26/022','26/023','26/024','26/025','26/026','26/027','26/028']);
+const BASELINE_IDS  = new Set(['26/020','26/021','26/022','26/023','26/024','26/025','26/026','26/027','26/028']);
+
+// Runtime set — starts with baseline, grows as we fetch
+let FETCHED_IDS = new Set([...BASELINE_IDS]);
+
+// ── Load from localStorage ───────────────────────────
+function loadStorage() {
+  try {
+    const savedFreq = localStorage.getItem(LS_FREQ);
+    const savedIds  = localStorage.getItem(LS_IDS);
+    if(savedFreq) {
+      const d = JSON.parse(savedFreq);
+      // Merge saved freq on top of baseline (in case baseline was updated)
+      Object.entries(d.extra).forEach(([n,v]) => FREQ[+n] = (FREQ[+n]||0) + v);
+      TOTAL_DRAWS = d.total;
+    }
+    if(savedIds) {
+      JSON.parse(savedIds).forEach(id => FETCHED_IDS.add(id));
+    }
+  } catch(e) {}
+}
+
+// ── Save to localStorage ─────────────────────────────
+function saveStorage(newDraws) {
+  try {
+    // Save extra freq counts on top of baseline
+    const extra = {};
+    newDraws.forEach(d => {
+      [...d.nums, d.special].forEach(n => { extra[n] = (extra[n]||0) + 1; });
+    });
+    // Merge with any previously saved extras
+    const prev = localStorage.getItem(LS_FREQ);
+    if(prev) {
+      const d = JSON.parse(prev);
+      Object.entries(d.extra).forEach(([n,v]) => { extra[+n] = (extra[+n]||0) + v; });
+    }
+    localStorage.setItem(LS_FREQ,  JSON.stringify({extra, total: TOTAL_DRAWS}));
+    // Save all fetched IDs beyond baseline
+    const extraIds = [...FETCHED_IDS].filter(id => !BASELINE_IDS.has(id));
+    localStorage.setItem(LS_IDS, JSON.stringify(extraIds));
+    // Save draw history (newest first, cap at 200)
+    const prevDraws = JSON.parse(localStorage.getItem(LS_DRAWS)||'[]');
+    const allDraws  = [...newDraws, ...prevDraws].slice(0, 200);
+    localStorage.setItem(LS_DRAWS, JSON.stringify(allDraws));
+  } catch(e) {}
+}
+
+// ── Load saved draw history for display ─────────────
+function loadLatestFromStorage() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(LS_DRAWS)||'[]');
+    if(saved.length > 0) return saved[0];
+  } catch(e) {}
+  return null;
+}
 
 const ballColor = n => n<=10?'r':n<=20?'b':n<=30?'g':n<=40?'r':'b';
 
@@ -615,104 +672,128 @@ function showBuiltInDraw() {
     +`<div class="mb plus">+</div><div class="mb s">${sp}</div>`;
 }
 
-// ── Auto-fetch from lottery.hk ───────────────────────
+// ── Auto-fetch from lottery.hk via CORS proxies ──────
 async function fetchLatest(){
   const btn=document.getElementById('btn-fetch');
   const dot=document.getElementById('status-dot');
   const txt=document.getElementById('status-txt');
   btn.disabled=true;
   dot.className='dot spin';
-  txt.innerHTML='<span style="color:var(--gold)">正在從 lottery.hk 獲取最新數據… / Fetching latest data from lottery.hk…</span>';
+  txt.innerHTML='<span style="color:var(--gold)">正在獲取最新數據… / Fetching latest data…</span>';
 
-  // Use allorigins CORS proxy to fetch lottery.hk results page
-  const targetUrl = 'https://lottery.hk/en/mark-six/results/';
-  const proxyUrl  = `https://api.allorigins.win/get?url=${encodeURIComponent(targetUrl)}`;
+  const TARGET = 'https://lottery.hk/en/mark-six/results/';
 
-  try {
-    const resp = await fetch(proxyUrl);
-    if(!resp.ok) throw new Error(`HTTP ${resp.status}`);
-    const json = await resp.json();
-    const html = json.contents;
-    if(!html) throw new Error('空回應 / Empty response');
+  // Try multiple CORS proxies in order until one works
+  const proxies = [
+    url => `https://corsproxy.io/?url=${encodeURIComponent(url)}`,
+    url => `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`,
+    url => `https://api.codetabs.com/v1/proxy?quest=${url}`,
+  ];
 
-    // Parse draw rows from the HTML table
-    // Each row: <td>26/028</td> <td>12/03/2026</td> <td>..balls..</td>
-    const rowRegex = /(\d{2}\/\d{3})[^<]*<\/td>\s*<td[^>]*>\s*(\d{2}\/\d{2}\/\d{4})/g;
-    const ballRegex = /\*\s*(\d{1,2})/g;
+  let html = null;
+  let usedProxy = '';
 
-    // Split by draw rows in the table
-    const drawRegex = /(\d{2}\/\d{3})<\/td><td[^>]*>([\d\/]+)<\/td><td[^>]*>([\s\S]*?)<\/td>/g;
-
-    // Simpler: find all draw blocks using the known structure
-    const blocks = [...html.matchAll(/<tr[^>]*>[\s\S]*?(\d{2}\/\d{3})[\s\S]*?(\d{2}\/\d{2}\/\d{4})[\s\S]*?(<td[\s\S]*?<\/td>)[\s\S]*?<\/tr>/g)];
-
-    // Alternative direct parse: find draw IDs and their following numbers
-    const draws = [];
-    const idDateRegex = />(\d{2}\/\d{3})<\/td>\s*<td[^>]*>([\d\/]+)<\/td>/g;
-    const allText = html.replace(/<[^>]+>/g, ' ').replace(/\s+/g,' ');
-
-    // Parse the plain text version: "26/028 12/03/2026 7 13 14 16 26 30 34"
-    const plainRegex = /(\d{2}\/\d{3})\s+(\d{2}\/\d{2}\/\d{4})\s+((?:\d{1,2}\s*){7})/g;
-    let m;
-    while((m=plainRegex.exec(allText))!==null){
-      const id   = m[1];
-      const date = m[2];
-      const numStrs = m[3].trim().split(/\s+/).map(Number).filter(n=>n>=1&&n<=49);
-      if(numStrs.length===7){
-        draws.push({ id, date, nums: numStrs.slice(0,6), special: numStrs[6] });
+  for(const makeUrl of proxies){
+    try{
+      const proxyUrl = makeUrl(TARGET);
+      const resp = await fetch(proxyUrl, {signal: AbortSignal.timeout(8000)});
+      if(!resp.ok) continue;
+      const ct = resp.headers.get('content-type')||'';
+      if(ct.includes('json')){
+        const j = await resp.json();
+        html = j.contents || j.data || JSON.stringify(j);
+      } else {
+        html = await resp.text();
       }
-    }
+      if(html && html.includes('26/')){
+        usedProxy = proxyUrl.split('?')[0];
+        break;
+      }
+      html = null;
+    } catch(e){ continue; }
+  }
 
-    if(draws.length===0) throw new Error('解析失敗 / Could not parse draw data');
-
-    // Filter to only draws after our baseline
-    const newDraws = draws.filter(d=>!FETCHED_IDS.has(d.id));
-
-    if(newDraws.length===0){
-      dot.className='dot ok';
-      txt.innerHTML=`<span style="color:var(--green)">✓ 已是最新 · Already up to date — 最新一期 26/028（2026/03/12）</span>`;
-      document.getElementById('draw-count').textContent=`數據期數 / Total draws: ${TOTAL_DRAWS}`;
-      btn.disabled=false;
-      return;
-    }
-
-    // Sort newest first
-    newDraws.sort((a,b)=>new Date(b.date.split('/').reverse().join('-'))-new Date(a.date.split('/').reverse().join('-')));
-    const latest=newDraws[0];
-
-    // Merge into FREQ
-    newDraws.forEach(d=>{
-      [...d.nums, d.special].forEach(n=>{ if(n>=1&&n<=49) FREQ[n]=(FREQ[n]||0)+1; });
-      FETCHED_IDS.add(d.id);
-      TOTAL_DRAWS++;
-    });
-
-    // Update latest draw panel
-    document.getElementById('dm-id').textContent   = latest.id;
-    document.getElementById('dm-date').textContent = latest.date;
-    document.getElementById('dm-prize').textContent= '—';
-    document.getElementById('dm-added').textContent= `+${newDraws.length} 期新數據 / new draws`;
-    document.getElementById('draw-meta').style.display='flex';
-    const mbEl=document.getElementById('mini-balls');
-    mbEl.style.display='flex';
-    mbEl.innerHTML=latest.nums.map(n=>`<div class="mb ${ballColor(n)}">${n}</div>`).join('')
-      +`<div class="mb plus">+</div><div class="mb s">${latest.special}</div>`;
-
-    currentPick=generate(seed);
-    render(currentPick);
-
-    dot.className='dot ok';
-    txt.innerHTML=`<span style="color:var(--green)">✓ 已更新 · Updated +${newDraws.length} 期 — 最新一期 ${latest.id}（${latest.date}）</span>`;
-    document.getElementById('draw-count').textContent=`數據期數 / Total draws: ${TOTAL_DRAWS}`;
-
-  } catch(err) {
+  if(!html){
     dot.className='dot err';
     txt.innerHTML=`<span style="color:var(--red)">
-      ⚠ 自動獲取失敗 / Auto-fetch failed: ${err.message}<br>
+      ⚠ 自動獲取失敗 / Auto-fetch failed — 所有代理均無法連接 / All proxies unreachable<br>
       但不用擔心——本工具已內嵌最新數據（截至 26/028，12/03/2026），仍可正常使用。<br>
       Don't worry — built-in data is current up to draw 26/028 (12/03/2026) and works normally.
     </span>`;
+    btn.disabled=false;
+    return;
   }
+
+  // Parse draw data from HTML plain text
+  const allText = html.replace(/<[^>]+>/g,' ').replace(/\s+/g,' ');
+  const plainRegex = /(\d{2}\/\d{3})\s+(\d{2}\/\d{2}\/\d{4})\s+((?:\d{1,2}\s*){7})/g;
+  const draws = [];
+  let m;
+  while((m=plainRegex.exec(allText))!==null){
+    const numStrs = m[3].trim().split(/\s+/).map(Number).filter(n=>n>=1&&n<=49);
+    if(numStrs.length===7){
+      draws.push({ id:m[1], date:m[2], nums:numStrs.slice(0,6), special:numStrs[6] });
+    }
+  }
+
+  if(draws.length===0){
+    dot.className='dot err';
+    txt.innerHTML=`<span style="color:var(--red)">⚠ 解析失敗 / Parse failed — 無法讀取開獎數據 / Could not read draw data</span>`;
+    btn.disabled=false;
+    return;
+  }
+
+  // Only process draws AFTER our baseline date (12/03/2026)
+  const newDraws = draws.filter(d => {
+    if(FETCHED_IDS.has(d.id)) return false;
+    // date format is DD/MM/YYYY
+    const parts = d.date.split('/');
+    const drawDate = new Date(`${parts[2]}-${parts[1]}-${parts[0]}`);
+    return drawDate > BASELINE_DATE;
+  });
+
+  if(newDraws.length===0){
+    dot.className='dot ok';
+    txt.innerHTML=`<span style="color:var(--green)">✓ 已是最新 · Already up to date — 最新一期 26/028（2026/03/12）</span>`;
+    document.getElementById('draw-count').textContent=`數據期數 / Total draws: ${TOTAL_DRAWS}`;
+    btn.disabled=false;
+    return;
+  }
+
+  // Sort newest first
+  newDraws.sort((a,b)=>
+    new Date(b.date.split('/').reverse().join('-')) -
+    new Date(a.date.split('/').reverse().join('-'))
+  );
+  const latest = newDraws[0];
+
+  // Merge into FREQ
+  newDraws.forEach(d=>{
+    [...d.nums, d.special].forEach(n=>{ if(n>=1&&n<=49) FREQ[n]=(FREQ[n]||0)+1; });
+    FETCHED_IDS.add(d.id);
+    TOTAL_DRAWS++;
+  });
+
+  // ── Persist to localStorage ──────────────────────
+  saveStorage(newDraws);
+
+  // Update latest draw panel
+  document.getElementById('dm-id').textContent    = latest.id;
+  document.getElementById('dm-date').textContent  = latest.date;
+  document.getElementById('dm-prize').textContent = '—';
+  document.getElementById('dm-added').textContent = `+${newDraws.length} 期新數據 / new draws`;
+  document.getElementById('draw-meta').style.display='flex';
+  const mbEl=document.getElementById('mini-balls');
+  mbEl.style.display='flex';
+  mbEl.innerHTML=latest.nums.map(n=>`<div class="mb ${ballColor(n)}">${n}</div>`).join('')
+    +`<div class="mb plus">+</div><div class="mb s">${latest.special}</div>`;
+
+  currentPick=generate(seed);
+  render(currentPick);
+
+  dot.className='dot ok';
+  txt.innerHTML=`<span style="color:var(--green)">✓ 已更新 +${newDraws.length} 期 · Updated via ${usedProxy} — 最新一期 ${latest.id}（${latest.date}）</span>`;
+  document.getElementById('draw-count').textContent=`數據期數 / Total draws: ${TOTAL_DRAWS}`;
   btn.disabled=false;
 }
 
@@ -786,15 +867,36 @@ function copyScript(){
   });
 }
 
-// Init
+// ── Init ─────────────────────────────────────────────
+loadStorage();
+currentPick = generate(42);
 render(currentPick);
-showBuiltInDraw();
-document.getElementById('draw-count').textContent = `數據期數 / Base data: ${TOTAL_DRAWS} 期（至 12/03/2026）`;
-document.getElementById('status-dot').className = 'dot ok';
-document.getElementById('status-txt').innerHTML =
-  `<span style="color:var(--green)">✓ 已內嵌最新數據（26/028，12/03/2026）· 正在嘗試獲取更新… / Built-in data loaded. Checking for newer draws…</span>`;
 
-// Auto-fetch on page load to catch any draws after 26/020
+// Show latest draw — from localStorage if available, else built-in
+const savedLatest = loadLatestFromStorage();
+if(savedLatest) {
+  document.getElementById('dm-id').textContent    = savedLatest.id;
+  document.getElementById('dm-date').textContent  = savedLatest.date;
+  document.getElementById('dm-prize').textContent = '—';
+  document.getElementById('dm-added').textContent = '已儲存 / Saved';
+  document.getElementById('draw-meta').style.display = 'flex';
+  const mbEl = document.getElementById('mini-balls');
+  mbEl.style.display = 'flex';
+  mbEl.innerHTML = savedLatest.nums.map(n=>`<div class="mb ${ballColor(n)}">${n}</div>`).join('')
+    +`<div class="mb plus">+</div><div class="mb s">${savedLatest.special}</div>`;
+  document.getElementById('draw-count').textContent = `數據期數 / Total draws: ${TOTAL_DRAWS}（含儲存數據）`;
+  document.getElementById('status-dot').className = 'dot ok';
+  document.getElementById('status-txt').innerHTML =
+    `<span style="color:var(--green)">✓ 已從本機讀取數據 · Loaded from local storage — 最新 ${savedLatest.id}（${savedLatest.date}）· 正在嘗試獲取更新…</span>`;
+} else {
+  showBuiltInDraw();
+  document.getElementById('draw-count').textContent = `數據期數 / Base data: ${TOTAL_DRAWS} 期（至 12/03/2026）`;
+  document.getElementById('status-dot').className = 'dot ok';
+  document.getElementById('status-txt').innerHTML =
+    `<span style="color:var(--green)">✓ 已內嵌最新數據（26/028，12/03/2026）· 正在嘗試獲取更新… / Built-in data loaded. Checking for newer draws…</span>`;
+}
+
+// Auto-fetch on page load
 window.addEventListener('load', () => {
   setTimeout(fetchLatest, 1000);
 });
