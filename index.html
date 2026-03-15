@@ -728,11 +728,14 @@ async function fetchLatest(){
 
   if(!html){
     dot.className='dot err';
+    const fbStatus = db
+      ? '<br><span style="color:var(--green)">✓ Firebase 雲端已連接 · Firebase connected</span>'
+      : '<br><span style="color:var(--muted)">⚠ Firebase 未連接 · Firebase not connected</span>';
     txt.innerHTML=`<span style="color:var(--red)">
       ⚠ 自動獲取失敗 / Auto-fetch failed — 所有代理均無法連接 / All proxies unreachable<br>
       但不用擔心——本工具已內嵌最新數據（截至 26/028，12/03/2026），仍可正常使用。<br>
       Don't worry — built-in data is current up to draw 26/028 (12/03/2026) and works normally.
-    </span>`;
+    </span>${fbStatus}`;
     btn.disabled=false;
     return;
   }
@@ -767,7 +770,8 @@ async function fetchLatest(){
 
   if(newDraws.length===0){
     dot.className='dot ok';
-    txt.innerHTML=`<span style="color:var(--green)">✓ 已是最新 · Already up to date — 最新一期 26/028（2026/03/12）</span>`;
+    const fbOk = db ? ' &nbsp;·&nbsp; <span style="color:var(--green)">☁ Firebase ✓</span>' : '';
+    txt.innerHTML=`<span style="color:var(--green)">✓ 已是最新 · Already up to date — 最新一期 26/028（2026/03/12）${fbOk}</span>`;
     document.getElementById('draw-count').textContent=`數據期數 / Total draws: ${TOTAL_DRAWS}`;
     btn.disabled=false;
     return;
@@ -914,9 +918,12 @@ async function init() {
     document.getElementById('status-txt').innerHTML =
       `<span style="color:var(--green)">✓ 已從雲端讀取數據 · Loaded from Firebase — 最新 ${savedLatest.id}（${savedLatest.date}）· 正在嘗試獲取更新…</span>`;
   } else {
+    const fbNote = db
+      ? ' &nbsp;<span style="color:var(--green)">☁ Firebase ✓</span>'
+      : ' &nbsp;<span style="color:var(--muted)">☁ Firebase —</span>';
     document.getElementById('status-dot').className = 'dot ok';
     document.getElementById('status-txt').innerHTML =
-      `<span style="color:var(--green)">✓ 已內嵌最新數據（26/028，12/03/2026）· 正在嘗試獲取更新… / Built-in data loaded. Checking for newer draws…</span>`;
+      `<span style="color:var(--green)">✓ 已內嵌最新數據（26/028，12/03/2026）· 正在嘗試獲取更新… / Built-in data loaded. Checking for newer draws…${fbNote}</span>`;
   }
 
   // Auto-fetch latest draw
