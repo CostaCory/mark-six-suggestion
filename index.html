@@ -269,6 +269,9 @@
     .balance-strip{grid-template-columns:repeat(2,1fr);}
   }
 </style>
+<!-- Firebase SDK -->
+<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
 </head>
 <body>
 
@@ -335,8 +338,8 @@
       <div class="en"><span class="sn">①</span>Click the "Fetch Latest" button</div>
     </div>
     <div class="how-step">
-      <div class="zh"><span class="sn">②</span>透過 <strong>allorigins.win</strong> CORS 代理，抓取 <strong>lottery.hk</strong> 的開獎頁面，解析最新期數</div>
-      <div class="en"><span class="sn">②</span>Uses the <strong>allorigins.win</strong> CORS proxy to fetch <strong>lottery.hk</strong> results and parse the latest draws</div>
+      <div class="zh"><span class="sn">②</span>依次嘗試多個 CORS 代理（corsproxy.io → allorigins.win → codetabs.com），成功即抓取 <strong>lottery.hk</strong> 開獎數據</div>
+      <div class="en"><span class="sn">②</span>Tries multiple CORS proxies in order (corsproxy.io → allorigins.win → codetabs.com), fetches <strong>lottery.hk</strong> on first success</div>
     </div>
     <div class="how-step">
       <div class="zh"><span class="sn">③</span>最新開獎號碼即時顯示，頻率數據自動更新，選號建議同步刷新</div>
@@ -593,65 +596,75 @@ function generate(seed){
 
 let seed=42, currentPick=generate(42);
 
-// ── localStorage keys ────────────────────────────────
-const LS_FREQ   = 'ms_freq_v1';
-const LS_DRAWS  = 'ms_draws_v1';
-const LS_IDS    = 'ms_ids_v1';
+// ── Firebase Config & Init ───────────────────────────
+const firebaseConfig = {
+  apiKey: "AIzaSyD5RzpcWU5lA-dP_jc-VpPHd2bJK04vx4o",
+  authDomain: "mark-six-suggestion.firebaseapp.com",
+  projectId: "mark-six-suggestion",
+  storageBucket: "mark-six-suggestion.firebasestorage.app",
+  messagingSenderId: "428005869957",
+  appId: "1:428005869957:web:1becf14417dc627e1ddcec"
+};
+let db = null;
+function initFirebase() {
+  try {
+    if(!firebase.apps.length) firebase.initializeApp(firebaseConfig);
+    db = firebase.firestore();
+    console.log('Firebase connected');
+  } catch(e) { console.warn('Firebase init failed:', e); }
+}
 
 // ── Baseline ─────────────────────────────────────────
 const BASELINE_DATE = new Date('2026-03-12T00:00:00');
 const BASELINE_IDS  = new Set(['26/020','26/021','26/022','26/023','26/024','26/025','26/026','26/027','26/028']);
-
-// Runtime set — starts with baseline, grows as we fetch
 let FETCHED_IDS = new Set([...BASELINE_IDS]);
 
-// ── Load from localStorage ───────────────────────────
-function loadStorage() {
+// ── Load from Firestore ──────────────────────────────
+async function loadStorage() {
+  if(!db) return;
   try {
-    const savedFreq = localStorage.getItem(LS_FREQ);
-    const savedIds  = localStorage.getItem(LS_IDS);
-    if(savedFreq) {
-      const d = JSON.parse(savedFreq);
-      // Merge saved freq on top of baseline (in case baseline was updated)
-      Object.entries(d.extra).forEach(([n,v]) => FREQ[+n] = (FREQ[+n]||0) + v);
-      TOTAL_DRAWS = d.total;
+    const freqDoc = await db.collection('marksix').doc('freq').get();
+    if(freqDoc.exists) {
+      const d = freqDoc.data();
+      if(d.extra) Object.entries(d.extra).forEach(([n,v]) => FREQ[+n] = (FREQ[+n]||0) + v);
+      if(d.total) TOTAL_DRAWS = d.total;
     }
-    if(savedIds) {
-      JSON.parse(savedIds).forEach(id => FETCHED_IDS.add(id));
+    const idsDoc = await db.collection('marksix').doc('ids').get();
+    if(idsDoc.exists && idsDoc.data().ids) {
+      idsDoc.data().ids.forEach(id => FETCHED_IDS.add(id));
     }
-  } catch(e) {}
+  } catch(e) { console.warn('Firestore load failed:', e); }
 }
 
-// ── Save to localStorage ─────────────────────────────
-function saveStorage(newDraws) {
+// ── Save to Firestore ────────────────────────────────
+async function saveStorage(newDraws) {
+  if(!db) return;
   try {
-    // Save extra freq counts on top of baseline
-    const extra = {};
+    const freqDoc = await db.collection('marksix').doc('freq').get();
+    const prevExtra = (freqDoc.exists && freqDoc.data().extra) ? freqDoc.data().extra : {};
+    const extra = {...prevExtra};
     newDraws.forEach(d => {
-      [...d.nums, d.special].forEach(n => { extra[n] = (extra[n]||0) + 1; });
+      [...d.nums, d.special].forEach(n => { extra[String(n)] = (extra[String(n)]||0) + 1; });
     });
-    // Merge with any previously saved extras
-    const prev = localStorage.getItem(LS_FREQ);
-    if(prev) {
-      const d = JSON.parse(prev);
-      Object.entries(d.extra).forEach(([n,v]) => { extra[+n] = (extra[+n]||0) + v; });
-    }
-    localStorage.setItem(LS_FREQ,  JSON.stringify({extra, total: TOTAL_DRAWS}));
-    // Save all fetched IDs beyond baseline
+    await db.collection('marksix').doc('freq').set({ extra, total: TOTAL_DRAWS });
     const extraIds = [...FETCHED_IDS].filter(id => !BASELINE_IDS.has(id));
-    localStorage.setItem(LS_IDS, JSON.stringify(extraIds));
-    // Save draw history (newest first, cap at 200)
-    const prevDraws = JSON.parse(localStorage.getItem(LS_DRAWS)||'[]');
+    await db.collection('marksix').doc('ids').set({ ids: extraIds });
+    const drawsDoc = await db.collection('marksix').doc('draws').get();
+    const prevDraws = (drawsDoc.exists && drawsDoc.data().list) ? drawsDoc.data().list : [];
     const allDraws  = [...newDraws, ...prevDraws].slice(0, 200);
-    localStorage.setItem(LS_DRAWS, JSON.stringify(allDraws));
-  } catch(e) {}
+    await db.collection('marksix').doc('draws').set({ list: allDraws });
+    console.log('Saved to Firestore');
+  } catch(e) { console.warn('Firestore save failed:', e); }
 }
 
-// ── Load saved draw history for display ─────────────
-function loadLatestFromStorage() {
+// ── Load latest draw from Firestore ─────────────────
+async function loadLatestFromStorage() {
+  if(!db) return null;
   try {
-    const saved = JSON.parse(localStorage.getItem(LS_DRAWS)||'[]');
-    if(saved.length > 0) return saved[0];
+    const drawsDoc = await db.collection('marksix').doc('draws').get();
+    if(drawsDoc.exists && drawsDoc.data().list && drawsDoc.data().list.length > 0) {
+      return drawsDoc.data().list[0];
+    }
   } catch(e) {}
   return null;
 }
@@ -867,39 +880,51 @@ function copyScript(){
   });
 }
 
-// ── Init ─────────────────────────────────────────────
-loadStorage();
-currentPick = generate(42);
-render(currentPick);
-
-// Show latest draw — from localStorage if available, else built-in
-const savedLatest = loadLatestFromStorage();
-if(savedLatest) {
-  document.getElementById('dm-id').textContent    = savedLatest.id;
-  document.getElementById('dm-date').textContent  = savedLatest.date;
-  document.getElementById('dm-prize').textContent = '—';
-  document.getElementById('dm-added').textContent = '已儲存 / Saved';
-  document.getElementById('draw-meta').style.display = 'flex';
-  const mbEl = document.getElementById('mini-balls');
-  mbEl.style.display = 'flex';
-  mbEl.innerHTML = savedLatest.nums.map(n=>`<div class="mb ${ballColor(n)}">${n}</div>`).join('')
-    +`<div class="mb plus">+</div><div class="mb s">${savedLatest.special}</div>`;
-  document.getElementById('draw-count').textContent = `數據期數 / Total draws: ${TOTAL_DRAWS}（含儲存數據）`;
-  document.getElementById('status-dot').className = 'dot ok';
-  document.getElementById('status-txt').innerHTML =
-    `<span style="color:var(--green)">✓ 已從本機讀取數據 · Loaded from local storage — 最新 ${savedLatest.id}（${savedLatest.date}）· 正在嘗試獲取更新…</span>`;
-} else {
+// ── Init (async — waits for Firebase) ────────────────
+async function init() {
+  // Show built-in draw immediately so page feels responsive
   showBuiltInDraw();
   document.getElementById('draw-count').textContent = `數據期數 / Base data: ${TOTAL_DRAWS} 期（至 12/03/2026）`;
-  document.getElementById('status-dot').className = 'dot ok';
+  document.getElementById('status-dot').className = 'dot spin';
   document.getElementById('status-txt').innerHTML =
-    `<span style="color:var(--green)">✓ 已內嵌最新數據（26/028，12/03/2026）· 正在嘗試獲取更新… / Built-in data loaded. Checking for newer draws…</span>`;
+    `<span style="color:var(--gold)">正在連接雲端數據庫… / Connecting to cloud database…</span>`;
+
+  // Init Firebase then load cloud data
+  initFirebase();
+  await loadStorage();
+
+  // Re-generate with updated FREQ from cloud
+  currentPick = generate(42);
+  render(currentPick);
+
+  // Show latest draw from cloud if available
+  const savedLatest = await loadLatestFromStorage();
+  if(savedLatest) {
+    document.getElementById('dm-id').textContent    = savedLatest.id;
+    document.getElementById('dm-date').textContent  = savedLatest.date;
+    document.getElementById('dm-prize').textContent = '—';
+    document.getElementById('dm-added').textContent = '雲端已儲存 / Cloud saved';
+    document.getElementById('draw-meta').style.display = 'flex';
+    const mbEl = document.getElementById('mini-balls');
+    mbEl.style.display = 'flex';
+    mbEl.innerHTML = savedLatest.nums.map(n=>`<div class="mb ${ballColor(n)}">${n}</div>`).join('')
+      +`<div class="mb plus">+</div><div class="mb s">${savedLatest.special}</div>`;
+    document.getElementById('draw-count').textContent = `數據期數 / Total draws: ${TOTAL_DRAWS}（雲端同步）`;
+    document.getElementById('status-dot').className = 'dot ok';
+    document.getElementById('status-txt').innerHTML =
+      `<span style="color:var(--green)">✓ 已從雲端讀取數據 · Loaded from Firebase — 最新 ${savedLatest.id}（${savedLatest.date}）· 正在嘗試獲取更新…</span>`;
+  } else {
+    document.getElementById('status-dot').className = 'dot ok';
+    document.getElementById('status-txt').innerHTML =
+      `<span style="color:var(--green)">✓ 已內嵌最新數據（26/028，12/03/2026）· 正在嘗試獲取更新… / Built-in data loaded. Checking for newer draws…</span>`;
+  }
+
+  // Auto-fetch latest draw
+  setTimeout(fetchLatest, 500);
 }
 
-// Auto-fetch on page load
-window.addEventListener('load', () => {
-  setTimeout(fetchLatest, 1000);
-});
+// Load Firebase SDK then start app
+window.addEventListener('load', () => { init(); });
 </script>
 </body>
 </html>
